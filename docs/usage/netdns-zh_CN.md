@@ -218,10 +218,11 @@ spec:
 
 ```shell
 SERVER="172.41.71.0"
+cat <<EOF | kubectl apply -f -
 apiVersion: kdoctor.io/v1beta1
 kind: Netdns
 metadata:
-  name: netdns- user
+  name: netdns-user
 spec:
   expect:
     meanAccessDelayInMs: 1500
