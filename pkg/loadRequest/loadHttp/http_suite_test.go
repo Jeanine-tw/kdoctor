@@ -1,6 +1,6 @@
 // Copyright 2023 Authors of kdoctor-io
 // SPDX-License-Identifier: Apache-2.0
-package loadDns_test
+package loadHttp_test
 
 import (
 	"testing"
@@ -11,12 +11,12 @@ import (
 	config "github.com/kdoctor-io/kdoctor/pkg/types"
 )
 
-func TestLoadDns(t *testing.T) {
+func TestLoadHttp(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "load request Suite")
 }
 
 var _ = BeforeSuite(func() {
 	// nothing to do
-	config.AgentConfig.Configmap.NetdnsDefaultConcurrency = 10
+	config.AgentConfig.Configmap.NethttpDefaultConcurrency = 10
 })
