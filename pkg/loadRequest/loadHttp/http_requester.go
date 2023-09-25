@@ -30,18 +30,20 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/kdoctor-io/kdoctor/pkg/k8s/apis/system/v1beta1"
-	config "github.com/kdoctor-io/kdoctor/pkg/types"
-	"github.com/kdoctor-io/kdoctor/pkg/utils/stats"
-	"golang.org/x/net/http2"
 	"io"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/kdoctor-io/kdoctor/pkg/k8s/apis/system/v1beta1"
+	config "github.com/kdoctor-io/kdoctor/pkg/types"
+	"github.com/kdoctor-io/kdoctor/pkg/utils/stats"
+
+	"golang.org/x/net/http2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Max size of the buffer of result channel.
@@ -114,6 +116,9 @@ type Work struct {
 	// Timeout in seconds.
 	Timeout int
 
+	/// RequestTimeSecond request in second
+	RequestTimeSecond int
+
 	// Qps is the rate limit in queries per second.
 	QPS int
 
@@ -145,6 +150,7 @@ type Work struct {
 	initOnce  sync.Once
 	results   chan *result
 	stopCh    chan struct{}
+	runCh     chan struct{}
 	start     time.Duration
 	startTime metav1.Time
 	report    *report
@@ -155,6 +161,10 @@ func (b *Work) Init() {
 	b.initOnce.Do(func() {
 		b.results = make(chan *result, MaxResultChannelSize)
 		b.stopCh = make(chan struct{}, b.Concurrency)
+		b.runCh = make(chan struct{}, b.QPS*b.RequestTimeSecond)
+		for i := 0; i < b.QPS*b.RequestTimeSecond; i++ {
+			b.runCh <- struct{}{}
+		}
 	})
 }
 
@@ -183,6 +193,7 @@ func (b *Work) Stop() {
 
 func (b *Work) Finish() {
 	close(b.results)
+	close(b.runCh)
 	total := b.now() - b.start
 	// Wait until the reporter is done.
 	<-b.report.done
@@ -191,65 +202,74 @@ func (b *Work) Finish() {
 
 func (b *Work) makeRequest(c *http.Client, wg *sync.WaitGroup) {
 	defer wg.Done()
-	s := b.now()
-	var size int64
-	var dnsStart, connStart, resStart time.Duration
-	var dnsDuration, connDuration, resDuration, reqDuration time.Duration
-	var req *http.Request
-	if b.RequestFunc != nil {
-		req = b.RequestFunc()
-	} else {
-		req = cloneRequest(b.Request, b.RequestBody)
-	}
-	trace := &httptrace.ClientTrace{
-		DNSStart: func(info httptrace.DNSStartInfo) {
-			dnsStart = b.now()
-		},
-		DNSDone: func(dnsInfo httptrace.DNSDoneInfo) {
-			dnsDuration = b.now() - dnsStart
-		},
-		GetConn: func(h string) {
-			connStart = b.now()
-		},
-		GotConn: func(connInfo httptrace.GotConnInfo) {
-			if !connInfo.Reused {
-				connDuration = b.now() - connStart
-			}
-		},
-	}
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
-	ctx, cancel := context.WithTimeout(req.Context(), time.Duration(b.Timeout)*time.Millisecond)
-	defer cancel()
-	req = req.WithContext(ctx)
-	resp, err := c.Do(req)
-	t := b.now()
-	resDuration = t - resStart
-	finish := t - s
-	var statusCode int
-	if err == nil {
-		size = resp.ContentLength
-		resp.Body.Close()
-		statusCode = resp.StatusCode
-	} else {
-		statusCode = 0
-	}
-	if b.ExpectStatusCode != nil {
-		if statusCode != *b.ExpectStatusCode {
-			if err == nil {
-				err = fmt.Errorf("The %d status code returned is not the expected %d ", statusCode, *b.ExpectStatusCode)
+
+	select {
+	case <-b.runCh:
+		// get request
+		s := b.now()
+		var size int64
+		var dnsStart, connStart, resStart time.Duration
+		var dnsDuration, connDuration, resDuration, reqDuration time.Duration
+		var req *http.Request
+		if b.RequestFunc != nil {
+			req = b.RequestFunc()
+		} else {
+			req = cloneRequest(b.Request, b.RequestBody)
+		}
+		trace := &httptrace.ClientTrace{
+			DNSStart: func(info httptrace.DNSStartInfo) {
+				dnsStart = b.now()
+			},
+			DNSDone: func(dnsInfo httptrace.DNSDoneInfo) {
+				dnsDuration = b.now() - dnsStart
+			},
+			GetConn: func(h string) {
+				connStart = b.now()
+			},
+			GotConn: func(connInfo httptrace.GotConnInfo) {
+				if !connInfo.Reused {
+					connDuration = b.now() - connStart
+				}
+			},
+		}
+		req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+		ctx, cancel := context.WithTimeout(req.Context(), time.Duration(b.Timeout)*time.Millisecond)
+		defer cancel()
+		req = req.WithContext(ctx)
+		resp, err := c.Do(req)
+		t := b.now()
+		resDuration = t - resStart
+		finish := t - s
+		var statusCode int
+		if err == nil {
+			size = resp.ContentLength
+			resp.Body.Close()
+			statusCode = resp.StatusCode
+		} else {
+			statusCode = 0
+		}
+		if b.ExpectStatusCode != nil {
+			if statusCode != *b.ExpectStatusCode {
+				if err == nil {
+					err = fmt.Errorf("The %d status code returned is not the expected %d ", statusCode, *b.ExpectStatusCode)
+				}
 			}
 		}
+		b.results <- &result{
+			duration:      finish,
+			statusCode:    statusCode,
+			err:           err,
+			contentLength: size,
+			connDuration:  connDuration,
+			dnsDuration:   dnsDuration,
+			reqDuration:   reqDuration,
+			resDuration:   resDuration,
+		}
+	default:
+		// can't get request return
+		return
 	}
-	b.results <- &result{
-		duration:      finish,
-		statusCode:    statusCode,
-		err:           err,
-		contentLength: size,
-		connDuration:  connDuration,
-		dnsDuration:   dnsDuration,
-		reqDuration:   reqDuration,
-		resDuration:   resDuration,
-	}
+
 }
 
 func (b *Work) runWorker() {

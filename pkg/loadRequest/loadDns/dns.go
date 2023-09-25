@@ -73,6 +73,7 @@ func DnsRequest(logger *zap.Logger, reqData *DnsRequestData) (result *v1beta1.DN
 
 	w := &Work{
 		Concurrency:         config.AgentConfig.Configmap.NetdnsDefaultConcurrency,
+		RequestTimeSecond:   reqData.DurationInSecond,
 		QPS:                 reqData.Qps,
 		Timeout:             reqData.PerRequestTimeoutInMs,
 		Msg:                 new(dns.Msg).SetQuestion(reqData.TargetDomain, reqData.DnsType),

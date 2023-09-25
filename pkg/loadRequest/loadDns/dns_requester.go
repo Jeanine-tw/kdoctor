@@ -56,6 +56,9 @@ type Work struct {
 	// Timeout in seconds.
 	Timeout int
 
+	/// RequestTimeSecond request in second
+	RequestTimeSecond int
+
 	// Qps is the rate limit in queries per second.
 	QPS int
 
@@ -64,6 +67,7 @@ type Work struct {
 	initOnce  sync.Once
 	results   chan *result
 	stopCh    chan struct{}
+	runCh     chan struct{}
 	startTime metav1.Time
 	report    *report
 }
@@ -73,6 +77,10 @@ func (b *Work) Init() {
 	b.initOnce.Do(func() {
 		b.results = make(chan *result, maxResult)
 		b.stopCh = make(chan struct{}, b.Concurrency)
+		b.runCh = make(chan struct{}, b.QPS*b.RequestTimeSecond)
+		for i := 0; i < b.QPS*b.RequestTimeSecond; i++ {
+			b.runCh <- struct{}{}
+		}
 	})
 }
 
@@ -100,6 +108,7 @@ func (b *Work) Stop() {
 
 func (b *Work) Finish() {
 	close(b.results)
+	close(b.runCh)
 	total := metav1.Now().Sub(b.startTime.Time)
 	// Wait until the reporter is done.
 	<-b.report.done
@@ -108,12 +117,21 @@ func (b *Work) Finish() {
 
 func (b *Work) makeRequest(client *dns.Client, conn *dns.Conn, wg *sync.WaitGroup) {
 	defer wg.Done()
-	msg, rtt, err := client.ExchangeWithConn(b.Msg, conn)
-	b.results <- &result{
-		duration: rtt,
-		err:      err,
-		msg:      msg,
+
+	select {
+	case <-b.runCh:
+		// get request
+		msg, rtt, err := client.ExchangeWithConn(b.Msg, conn)
+		b.results <- &result{
+			duration: rtt,
+			err:      err,
+			msg:      msg,
+		}
+	default:
+		// can't get request return
+		return
 	}
+
 }
 
 func (b *Work) runWorker() {

@@ -77,6 +77,7 @@ func HttpRequest(logger *zap.Logger, reqData *HttpRequestData) *v1beta1.HttpMetr
 
 	w := &Work{
 		Request:             req,
+		RequestTimeSecond:   reqData.RequestTimeSecond,
 		Concurrency:         config.AgentConfig.Configmap.NethttpDefaultConcurrency,
 		QPS:                 reqData.Qps,
 		Timeout:             reqData.PerRequestTimeoutMS,
