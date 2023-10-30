@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	crd "github.com/kdoctor-io/kdoctor/pkg/k8s/apis/kdoctor.io/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func NewStatusHistoryRecord(startTime time.Time, RoundNumber int, schedulePlan *crd.SchedulePlan) *crd.StatusHistoryRecord {

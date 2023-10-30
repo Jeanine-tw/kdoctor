@@ -10,13 +10,12 @@ import (
 const NetDNSTaskName = "Netdns"
 
 type NetDNSTask struct {
-	TargetType    string             `json:"targetType"`
-	TargetNumber  int64              `json:"targetNumber"`
-	FailureReason *string            `json:"failureReason,omitempty"`
-	Succeed       bool               `json:"succeed"`
-	MaxCPU        string             `json:"MaxCPU"`
-	MaxMemory     string             `json:"MaxMemory"`
-	Detail        []NetDNSTaskDetail `json:"detail"`
+	TargetType     string             `json:"targetType"`
+	TargetNumber   int64              `json:"targetNumber"`
+	FailureReason  *string            `json:"failureReason,omitempty"`
+	Succeed        bool               `json:"succeed"`
+	SystemResource SystemResource     `json:"SystemResource"`
+	Detail         []NetDNSTaskDetail `json:"detail"`
 }
 
 type NetDNSTaskDetail struct {

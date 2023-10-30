@@ -19,3 +19,11 @@ type LatencyDistribution struct {
 	// Mean is the mean request latency.
 	Mean float32 `json:"Mean_inMs"`
 }
+
+type SystemResource struct {
+	SystemTotalAppHttpHealthyQPS int64  `json:"SystemTotalAppHttpHealthyQPS"`
+	SystemTotalNetReachQPS       int64  `json:"SystemTotalNetReachQPS"`
+	SystemTotalNetDnsQPS         int64  `json:"SystemTotalNetDnsQPS"`
+	MaxCPU                       string `json:"SystemMaxCPU"`
+	MaxMemory                    string `json:"SystemMaxMemory"`
+}

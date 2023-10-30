@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"sigs.k8s.io/yaml"
 	"strings"
 	"time"
 
@@ -170,7 +171,6 @@ func GetPluginReportResult(f *frame.Framework, name string, n int) (*kdoctor_rep
 	if err != nil {
 		return nil, fmt.Errorf("read plugin report body failed,err : %v", err)
 	}
-	ginkgo.GinkgoWriter.Println(string(body))
 	report := new(kdoctor_report.KdoctorReport)
 
 	err = json.Unmarshal(body, report)
@@ -202,6 +202,8 @@ func CompareResult(f *frame.Framework, name, taskKind string, podIPs []string, n
 			break
 		}
 	}
+	report, _ := yaml.Marshal(r)
+	ginkgo.GinkgoWriter.Println(string(report))
 	switch taskKind {
 	case pluginManager.KindNameNetReach:
 		obj := object.(*v1beta1.NetReach)

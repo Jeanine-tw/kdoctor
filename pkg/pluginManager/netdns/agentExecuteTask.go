@@ -227,9 +227,7 @@ func (s *PluginNetDns) AgentExecuteTask(logger *zap.Logger, ctx context.Context,
 	} else {
 		task.Succeed = true
 	}
-	mem, cpu := r.Stats()
-	task.MaxMemory = fmt.Sprintf("%.2fMB", float64(mem/(1024*1024)))
-	task.MaxCPU = fmt.Sprintf("%.3f%%", cpu)
+	task.SystemResource = r.Stats()
 	// every round done clean cpu mem stats
 	r.CleanStats()
 	return finalfailureReason, task, err

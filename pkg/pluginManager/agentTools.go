@@ -37,7 +37,7 @@ func (s *pluginAgentReconciler) CallPluginImplementRoundTask(logger *zap.Logger,
 
 	go func() {
 		// process mem cpu stats
-		resourceStats := resource.InitResource(ctx)
+		resourceStats := resource.InitResource(ctx, logger.Named("resource"), s.client, taskName)
 		resourceStats.RunResourceCollector()
 		startTime := metav1.Now()
 		msg := &systemv1beta1.Report{
